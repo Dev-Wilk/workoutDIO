@@ -1,15 +1,21 @@
+from ast import List
 from datetime import datetime
 from uuid import uuid4
 from fastapi import APIRouter, Body, HTTPException, status
 from pydantic import UUID4
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi_pagination import Page, add_pagination
+from sqlalchemy.orm import Session
 
-from workout_api.atleta.schemas import AtletaIn, AtletaOut, AtletaUpdate
+
+from workout_api.atleta.schemas import Atleta, AtletaIn, AtletaOut, AtletaUpdate
 from workout_api.atleta.models import AtletaModel
 from workout_api.categorias.models import CategoriaModel
 from workout_api.centro_treinamento.models import CentroTreinamentoModel
 
 from workout_api.contrib.dependencies import DatabaseDependency
 from sqlalchemy.future import select
+
 
 router = APIRouter()
 
@@ -19,6 +25,22 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     response_model=AtletaOut
 )
+
+@router.post("/atletas")
+async def create_atleta(atleta: Atleta, db: Session = Depends(get_db)):
+    db.add(atleta)
+    db.commit()
+    db.refresh(atleta)
+    return atleta
+
+def get_db(session: Session = Depends(SessionLocal)):
+    try:
+        yield session
+    finally:
+        return session
+
+add_pagination(router)
+
 async def post(
     db_session: DatabaseDependency, 
     atleta_in: AtletaIn = Body(...)
@@ -93,6 +115,57 @@ async def get(id: UUID4, db_session: DatabaseDependency) -> AtletaOut:
         )
     
     return atleta
+
+@router.get(
+    '/{nome}', 
+    summary='Consulta um Atleta pelo nome',
+    status_code=status.HTTP_200_OK,
+    response_model=AtletaOut,
+)
+async def get(nome: UUID4, db_session: DatabaseDependency) -> AtletaOut:
+    atleta: AtletaOut = (
+        await db_session.execute(select(AtletaModel).filter_by(nome= nome))
+    ).scalars().first()
+
+    if not atleta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f'Atleta não encontrado com o nome: {nome}'
+        )
+    
+    return atleta
+
+@router.get(
+    '/{cpf}', 
+    summary='Consulta um Atleta pelo nome',
+    status_code=status.HTTP_200_OK,
+    response_model=AtletaOut,
+)
+async def get(cpf: UUID4, db_session: DatabaseDependency) -> AtletaOut:
+    atleta: AtletaOut = (
+        await db_session.execute(select(AtletaModel).filter_by(cpf= cpf))
+    ).scalars().first()
+
+    if not atleta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f'Atleta não encontrado com o CPF: {cpf}'
+        )
+    
+    return atleta
+
+@router.get("/atletas", response_model=List[Atleta])
+async def get_atleta_by_nome_cpf(nome: str | None = None, cpf: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(Atleta)
+    if cpf:
+        query = query.filter(Atleta.cpf == cpf)
+    if nome:
+        query = query.filter(Atleta.nome.ilike(f"%{nome}%"))
+    atletas = query.all()
+    if not atletas:
+        raise HTTPException(status_code=404, detail="Atleta não encontrado")
+    return atletas
+
 
 
 @router.patch(

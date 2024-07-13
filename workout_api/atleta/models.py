@@ -1,7 +1,18 @@
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Float
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from contrib.models import BaseModel
+from workout_api.configs.database import Base
+
+class Atleta(Base):
+    __tablename__ = "atletas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(255), nullable=False)
+    cpf = Column(String(11), unique=True, nullable=False)
+    centro_treinamento = Column(String(255))
+    categoria = Column(String(255))
+
 
 
 class AtletaModel(BaseModel):
